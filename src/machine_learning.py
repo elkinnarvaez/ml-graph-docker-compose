@@ -26,7 +26,8 @@ def create_edges_naive(vertices):
 
 def create_edges(vertices, sqlContext):
     vertices.createOrReplaceTempView("vertices")
-    edges = sqlContext.sql("SELECT vertices1.id AS src, vertices2.id AS dst FROM vertices AS vertices1,vertices AS vertices2 WHERE vertices1.CommunityArea = vertices2.CommunityArea AND vertices1.District = vertices2.District AND vertices1.mesDel = vertices2.mesDel AND vertices1.Beat = vertices2.Beat")
+    # vertices1.mesDel = vertices2.mesDel AND vertices1.FBICode_index = vertices2.FBICode_index AND vertices1.Block_index = vertices2.Block_index AND vertices1.LocationDescription_index = vertices2.LocationDescription_index
+    edges = sqlContext.sql("SELECT vertices1.id AS src, vertices2.id AS dst FROM vertices AS vertices1,vertices AS vertices2 WHERE vertices1.CommunityArea = vertices2.CommunityArea AND vertices1.District = vertices2.District AND vertices1.Beat = vertices2.Beat AND vertices1.mesDel = vertices2.mesDel")
     return edges
 
 def parseVertices(line):
@@ -50,11 +51,11 @@ if __name__ == "__main__":
     vertices_rdd = lines.map(parseVertices)
     vertices = spark.createDataFrame(vertices_rdd).withColumn("id", monotonically_increasing_id())
     vertices = vertices.withColumn("timestamp", to_timestamp("Date", "MM/dd/yyyy hh:mm:ss"))
-    vertices = spark.createDataFrame(vertices.orderBy("timestamp").take(100))
+    vertices = spark.createDataFrame(vertices.orderBy("timestamp").take(500))
+    vertices.createOrReplaceTempView("temp_vertices")
+    sqlContext.sql("SELECT MAX(timestamp) FROM temp_vertices").show()
     vertices = vertices.select([column for column in vertices.columns if column not in {"Date", "timestamp"}])
     df = spark.createDataFrame(vertices.collect())
-    # vertices.createOrReplaceTempView("vertices")
-    # sqlContext.sql("SELECT MAX(timestamp) FROM vertices").show()
     vertices.show()
     # df.show()
 
@@ -86,12 +87,12 @@ if __name__ == "__main__":
     print("elapsed: {0} seconds".format(time.time() - start_time))
     print("------------ FINISHED CALCULATING OUTDEGREE ------------")
 
-    # print("------------ CALCULATING DEGREE ------------")
-    # start_time = time.time()
-    # degrees = g.degrees
-    # degrees.show()
-    # print("elapsed: {0} seconds".format(time.time() - start_time))
-    # print("------------ FINISHED CALCULATING DEGREE ------------")
+    print("------------ CALCULATING DEGREE ------------")
+    start_time = time.time()
+    degrees = g.degrees
+    degrees.show()
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINISHED CALCULATING DEGREE ------------")
 
     print("------------ CALCULATING STRONGLY CONNECTED COMPONENTS ------------")
     start_time = time.time()
@@ -151,9 +152,10 @@ if __name__ == "__main__":
     # print("elapsed: {0} seconds".format(time.time() - start_time))
     # print("------------ FINISHED CALCULATING TRIANGLE COUNT ------------")
 
+    df = df.select([column for column in df.columns if column not in {"id"}])
 
     #vectorizacion de los atributos
-    vector = VectorAssembler(inputCols = ['id', 'Arrest', 'Beat','Block_index', 'CommunityArea', 'District', 'Domestic', 'FBICode_index', 'IUCR_index', 'LocationDescription_index', 'XCoordinate', 'YCoordinate', 'diaDel', 'horaDel', 'mesDel', 'minutoDel', 'inDegree', 'outDegree', 'component', 'pagerank', 'community'], outputCol = 'atributos')
+    vector = VectorAssembler(inputCols = ['Arrest', 'Beat','Block_index', 'CommunityArea', 'District', 'Domestic', 'FBICode_index', 'IUCR_index', 'LocationDescription_index', 'XCoordinate', 'YCoordinate', 'diaDel', 'horaDel', 'mesDel', 'minutoDel', 'inDegree', 'outDegree', 'component', 'pagerank', 'community'], outputCol = 'atributos') # 'inDegree', 'outDegree', 'component', 'pagerank', 'community'
     df = vector.transform(df)
     df = df.select('atributos', 'Arrest')
     df = df.selectExpr("atributos as atributos", "Arrest as label")
