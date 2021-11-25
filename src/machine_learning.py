@@ -5,10 +5,12 @@ from pyspark.sql.functions import *
 from pyspark.ml.classification import LogisticRegression, DecisionTreeClassifier, RandomForestClassifier
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 
-from pyspark import SparkConf, SparkContext, SQLContext
+from pyspark import SparkConf, SparkContext
 from pyspark.sql import Row
 from pyspark.sql.functions import monotonically_increasing_id
 from graphframes import *
+from pyspark.sql import SQLContext
+
 import time
 
 def create_edges_naive(vertices):
@@ -48,11 +50,13 @@ if __name__ == "__main__":
     vertices_rdd = lines.map(parseVertices)
     vertices = spark.createDataFrame(vertices_rdd).withColumn("id", monotonically_increasing_id())
     vertices = vertices.withColumn("timestamp", to_timestamp("Date", "MM/dd/yyyy hh:mm:ss"))
-    vertices = spark.createDataFrame(vertices.orderBy("timestamp").take(100000))
+    vertices = spark.createDataFrame(vertices.orderBy("timestamp").take(100))
     vertices = vertices.select([column for column in vertices.columns if column not in {"Date", "timestamp"}])
+    df = spark.createDataFrame(vertices.collect())
     # vertices.createOrReplaceTempView("vertices")
     # sqlContext.sql("SELECT MAX(timestamp) FROM vertices").show()
     vertices.show()
+    # df.show()
 
     print("------------ CREATING EDGES ------------")
     start_time = time.time()
@@ -82,93 +86,114 @@ if __name__ == "__main__":
     print("elapsed: {0} seconds".format(time.time() - start_time))
     print("------------ FINISHED CALCULATING OUTDEGREE ------------")
 
-    print("------------ CALCULATING DEGREE ------------")
+    # print("------------ CALCULATING DEGREE ------------")
+    # start_time = time.time()
+    # degrees = g.degrees
+    # degrees.show()
+    # print("elapsed: {0} seconds".format(time.time() - start_time))
+    # print("------------ FINISHED CALCULATING DEGREE ------------")
+
+    print("------------ CALCULATING STRONGLY CONNECTED COMPONENTS ------------")
     start_time = time.time()
-    degrees = g.degrees
-    degrees.show()
+    stronglyConnectedComponets = g.stronglyConnectedComponents(maxIter=10)
+    stronglyConnectedComponets = stronglyConnectedComponets.select([column for column in stronglyConnectedComponets.columns if column not in {'Arrest', 'Beat','Block_index', 'CommunityArea', 'District', 'Domestic', 'FBICode_index', 'IUCR_index', 'LocationDescription_index', 'XCoordinate', 'YCoordinate', 'diaDel', 'horaDel', 'mesDel', 'minutoDel'}])
+    stronglyConnectedComponets.show()
     print("elapsed: {0} seconds".format(time.time() - start_time))
-    print("------------ FINISHED CALCULATING DEGREE ------------")
+    print("------------ FINISHED CALCULATING STRONGLY CONNECTED COMPONENTS ------------")
+
+    print("------------ CALCULATING PAGERANK ------------")
+    start_time = time.time()
+    pagerank = g.pageRank(resetProbability=0.15, maxIter=10).vertices
+    pagerank = pagerank.select([column for column in pagerank.columns if column not in {'Arrest', 'Beat','Block_index', 'CommunityArea', 'District', 'Domestic', 'FBICode_index', 'IUCR_index', 'LocationDescription_index', 'XCoordinate', 'YCoordinate', 'diaDel', 'horaDel', 'mesDel', 'minutoDel'}])
+    pagerank.show()
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINISHED CALCULATING PAGERANK ------------")
+
+    print("------------ CALCULATING LABEL PROPAGATION (COMMUNITIES) ------------")
+    start_time = time.time()
+    communities = g.labelPropagation(maxIter=5)
+    communities = communities.select([column for column in communities.columns if column not in {'Arrest', 'Beat','Block_index', 'CommunityArea', 'District', 'Domestic', 'FBICode_index', 'IUCR_index', 'LocationDescription_index', 'XCoordinate', 'YCoordinate', 'diaDel', 'horaDel', 'mesDel', 'minutoDel'}])
+    communities.createOrReplaceTempView("communities")
+    communities = sqlContext.sql("SELECT id, label AS community FROM communities")
+    communities.show()
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINISHED CALCULATING LABEL PROPAGATION (COMMUNITIES) ------------")
+
+    df.createOrReplaceTempView("df")
+    indegrees.createOrReplaceTempView("indegrees")
+    outdegrees.createOrReplaceTempView("outdegrees")
+    stronglyConnectedComponets.createOrReplaceTempView("stronglyConnectedComponets")
+    pagerank.createOrReplaceTempView("pagerank")
+    communities.createOrReplaceTempView("communities")
+    df = sqlContext.sql("SELECT * FROM df NATURAL JOIN indegrees")
+    df.createOrReplaceTempView("df")
+    df = sqlContext.sql("SELECT * FROM df NATURAL JOIN outdegrees")
+    df.createOrReplaceTempView("df")
+    df = sqlContext.sql("SELECT * FROM df NATURAL JOIN stronglyConnectedComponets")
+    df.createOrReplaceTempView("df")
+    df = sqlContext.sql("SELECT * FROM df NATURAL JOIN pagerank")
+    df.createOrReplaceTempView("df")
+    df = sqlContext.sql("SELECT * FROM df NATURAL JOIN communities")
+    df.show()
 
     # print("------------ CALCULATING CONNECTED COMPONENTS ------------")
-    # sc.setCheckpointDir("/tmp/graphframes-example-connected-components")
+    # sc.setCheckpointDir("/tmp/graphframes-connected-components")
     # start_time = time.time()
     # connectedComponets = g.connectedComponents()
     # connectedComponets.show()
     # print("elapsed: {0} seconds".format(time.time() - start_time))
     # print("------------ FINISHED CALCULATING CONNECTED COMPONENTS ------------")
 
-    print("------------ CALCULATING STRONGLY CONNECTED COMPONENTS ------------")
-    start_time = time.time()
-    stronglyConnectedComponets = g.stronglyConnectedComponents(maxIter=10)
-    stronglyConnectedComponets.show()
-    print("elapsed: {0} seconds".format(time.time() - start_time))
-    print("------------ FINISHED CALCULATING STRONGLY CONNECTED COMPONENTS ------------")
-
-    # print("------------ CALCULATING LABEL PROPAGATION (COMMUNITIES) ------------")
+    # print("------------ CALCULATING TRIANGLE COUNT ------------")
     # start_time = time.time()
-    # communities = g.labelPropagation(maxIter=5)
-    # communities.show()
+    # triangleCount = g.triangleCount()
+    # triangleCount.show()
     # print("elapsed: {0} seconds".format(time.time() - start_time))
-    # print("------------ FINISHED CALCULATING LABEL PROPAGATION (COMMUNITIES) ------------")
-
-    # print("------------ CALCULATING PAGERANK ------------")
-    # start_time = time.time()
-    # pagerank = g.pageRank(resetProbability=0.15, tol=0.01).vertices
-    # pagerank.show()
-    # print("elapsed: {0} seconds".format(time.time() - start_time))
-    # print("------------ FINISHED CALCULATING PAGERANK ------------")
-
-    print("------------ CALCULATING TRIANGLE COUNT ------------")
-    start_time = time.time()
-    triangleCount = g.triangleCount()
-    triangleCount.show()
-    print("elapsed: {0} seconds".format(time.time() - start_time))
-    print("------------ FINISHED CALCULATING TRIANGLE COUNT ------------")
-
-    # #vectorizacion de los atributos
-    # vector = VectorAssembler(inputCols = ['Domestic', 'Beat', 'District', 'Community Area', 'X Coordinate', 'Y Coordinate', 
-    #                                       'IUCR_index', 'Location Description_index', 'FBI Code_index', 'Block_index', 
-    #                                       'mesDel', 'diaDel', 'horaDel', 'minutoDel'], outputCol = 'atributos')
-    # df = vector.transform(df)
-    # df = df.select('atributos', 'Arrest')
-    # df = df.selectExpr("atributos as atributos", "Arrest as label")
-
-    # #division del dataset 70% entrenamiento - 30% pruebas
-    # train, test = df.randomSplit([0.7, 0.3], seed = 2018)
-
-    # #instacia del evaluador
-    # evaluator = BinaryClassificationEvaluator()
-
-    # #regresion logistica
-    # lr = LogisticRegression(featuresCol = 'atributos', labelCol = 'label', maxIter=10)
-    # lrModel = lr.fit(train)
-    # predictions = lrModel.transform(test)
-    # accuracy = predictions.filter(predictions.label == predictions.prediction).count() / float(predictions.count())
-    # print("=========================================================================================================================")
-    # print("REGRESION LOGISTICA")
-    # print('area bajo el ROC', evaluator.evaluate(predictions))
-    # print("presicion de la regresion logistica: ", accuracy)
-    # print("=========================================================================================================================")
+    # print("------------ FINISHED CALCULATING TRIANGLE COUNT ------------")
 
 
-    # #arboles de decision
-    # dt = DecisionTreeClassifier(featuresCol = 'atributos', labelCol = 'label', maxDepth = 3)
-    # dtModel = dt.fit(train)
-    # predictionsDt = dtModel.transform(test)
-    # accuracy2 = predictionsDt.filter(predictionsDt.label == predictionsDt.prediction).count() / float(predictionsDt.count())
-    # print("=========================================================================================================================")
-    # print("ARBOLES DE DECISION")
-    # print("Test Area Under ROC: " + str(evaluator.evaluate(predictionsDt, {evaluator.metricName: "areaUnderROC"})))
-    # print("presicion de los arboles de decision: ", accuracy2)
-    # print("=========================================================================================================================")
+    #vectorizacion de los atributos
+    vector = VectorAssembler(inputCols = ['id', 'Arrest', 'Beat','Block_index', 'CommunityArea', 'District', 'Domestic', 'FBICode_index', 'IUCR_index', 'LocationDescription_index', 'XCoordinate', 'YCoordinate', 'diaDel', 'horaDel', 'mesDel', 'minutoDel', 'inDegree', 'outDegree', 'component', 'pagerank', 'community'], outputCol = 'atributos')
+    df = vector.transform(df)
+    df = df.select('atributos', 'Arrest')
+    df = df.selectExpr("atributos as atributos", "Arrest as label")
 
-    # #random forest 
-    # rf = RandomForestClassifier(featuresCol = 'atributos', labelCol = 'label')
-    # rfModel = rf.fit(train)
-    # predictionsRf = rfModel.transform(test)
-    # accuracy3 = predictionsRf.filter(predictionsRf.label == predictionsRf.prediction).count() / float(predictionsRf.count())
-    # print("=========================================================================================================================")
-    # print("RANDOM FOREST") 
-    # print("Test Area Under ROC: " + str(evaluator.evaluate(predictionsRf, {evaluator.metricName: "areaUnderROC"}))) 
-    # print("presicion random forest: ", accuracy3)
-    # print("=========================================================================================================================")
+    #division del dataset 70% entrenamiento - 30% pruebas
+    train, test = df.randomSplit([0.7, 0.3], seed = 2018)
+
+    #instacia del evaluador
+    evaluator = BinaryClassificationEvaluator()
+
+    #regresion logistica
+    lr = LogisticRegression(featuresCol = 'atributos', labelCol = 'label', maxIter=10)
+    lrModel = lr.fit(train)
+    predictions = lrModel.transform(test)
+    accuracy = predictions.filter(predictions.label == predictions.prediction).count() / float(predictions.count())
+    print("=========================================================================================================================")
+    print("REGRESION LOGISTICA")
+    print('area bajo el ROC', evaluator.evaluate(predictions))
+    print("presicion de la regresion logistica: ", accuracy)
+    print("=========================================================================================================================")
+
+
+    #arboles de decision
+    dt = DecisionTreeClassifier(featuresCol = 'atributos', labelCol = 'label', maxDepth = 3)
+    dtModel = dt.fit(train)
+    predictionsDt = dtModel.transform(test)
+    accuracy2 = predictionsDt.filter(predictionsDt.label == predictionsDt.prediction).count() / float(predictionsDt.count())
+    print("=========================================================================================================================")
+    print("ARBOLES DE DECISION")
+    print("Test Area Under ROC: " + str(evaluator.evaluate(predictionsDt, {evaluator.metricName: "areaUnderROC"})))
+    print("presicion de los arboles de decision: ", accuracy2)
+    print("=========================================================================================================================")
+
+    #random forest 
+    rf = RandomForestClassifier(featuresCol = 'atributos', labelCol = 'label')
+    rfModel = rf.fit(train)
+    predictionsRf = rfModel.transform(test)
+    accuracy3 = predictionsRf.filter(predictionsRf.label == predictionsRf.prediction).count() / float(predictionsRf.count())
+    print("=========================================================================================================================")
+    print("RANDOM FOREST") 
+    print("Test Area Under ROC: " + str(evaluator.evaluate(predictionsRf, {evaluator.metricName: "areaUnderROC"}))) 
+    print("presicion random forest: ", accuracy3)
+    print("=========================================================================================================================")
