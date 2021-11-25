@@ -5,12 +5,13 @@ from pyspark.sql.functions import *
 from pyspark.ml.classification import LogisticRegression, DecisionTreeClassifier, RandomForestClassifier
 from pyspark.ml.evaluation import BinaryClassificationEvaluator
 
-from pyspark import SparkConf, SparkContext
+from pyspark import SparkConf, SparkContext, SQLContext
 from pyspark.sql import Row
 from pyspark.sql.functions import monotonically_increasing_id
 from graphframes import *
+import time
 
-def create_edges(vertices):
+def create_edges_naive(vertices):
     connections = list()
     vertices_collection = vertices.collect()
     for v1 in vertices_collection:
@@ -21,33 +22,108 @@ def create_edges(vertices):
     edges = spark.createDataFrame(connections, ["src", "dst", "relationship"])
     return edges
 
+def create_edges(vertices, sqlContext):
+    vertices.createOrReplaceTempView("vertices")
+    edges = sqlContext.sql("SELECT vertices1.id AS src, vertices2.id AS dst FROM vertices AS vertices1,vertices AS vertices2 WHERE vertices1.CommunityArea = vertices2.CommunityArea AND vertices1.District = vertices2.District AND vertices1.mesDel = vertices2.mesDel AND vertices1.Beat = vertices2.Beat")
+    return edges
+
 def parseVertices(line):
     field = line.split(",")
-    return Row(Arrest = int(field[0]), Domestic = int(field[1]), Beat = int(field[2]), District = float(field[3]), CommunityArea = float(field[4]), XCoordinate = float(field[5]), YCoordinate = float(field[6]), IUCR_index = float(field[7]), LocationDescription_index = float(field[8]), FBICode_index = float(field[9]), Block_index = float(field[10]), mesDel = int(field[11]), diaDel = int(field[12]), horaDel = int(field[13]), minutoDel = int(field[14]))
+    return Row(Date = field[0], Arrest = int(field[1]), Domestic = int(field[2]), Beat = int(field[3]), District = float(field[4]), CommunityArea = float(field[5]), XCoordinate = float(field[6]), YCoordinate = float(field[7]), IUCR_index = float(field[8]), LocationDescription_index = float(field[9]), FBICode_index = float(field[10]), Block_index = float(field[11]), mesDel = int(field[12]), diaDel = int(field[13]), horaDel = int(field[14]), minutoDel = int(field[15]))
 
 if __name__ == "__main__":
     conf = SparkConf().setAppName("MachineLearning")
     sc = SparkContext(conf = conf)
+    sqlContext = SQLContext(sc)
     #inicio sesion spark
     spark=SparkSession.builder.appName('MachineLearning').getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
 
     #carga de datos
     # df = spark.read.csv("/user/maria_dev/ml-graph/data/cleaned_data/*.csv", sep=',', header= True, inferSchema=True)
-    lines = spark.sparkContext.textFile("/tmp/data/cleaned_data/*.csv")
+    lines = spark.sparkContext.textFile("/tmp/data/cleaned_data_timestamp/*.csv")
     header = lines.first()
     lines = lines.filter(lambda line: line != header)
 
     vertices_rdd = lines.map(parseVertices)
     vertices = spark.createDataFrame(vertices_rdd).withColumn("id", monotonically_increasing_id())
+    vertices = vertices.withColumn("timestamp", to_timestamp("Date", "MM/dd/yyyy hh:mm:ss"))
+    vertices = spark.createDataFrame(vertices.orderBy("timestamp").take(100000))
+    vertices = vertices.select([column for column in vertices.columns if column not in {"Date", "timestamp"}])
+    # vertices.createOrReplaceTempView("vertices")
+    # sqlContext.sql("SELECT MAX(timestamp) FROM vertices").show()
     vertices.show()
 
-    edges = create_edges(vertices)
+    print("------------ CREATING EDGES ------------")
+    start_time = time.time()
+    edges = create_edges(vertices, sqlContext)
     # edges = spark.createDataFrame([(1, 2, "friends"), (1, 3, "friends")], ["src", "dst", "relationship"])
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINIHED CREATING EDGES ------------")
 
+    print("------------ CREATING GRAPH ------------")
+    start_time = time.time()
     g = GraphFrame(vertices, edges)
+    print("Number of edges: ", g.edges.count())
+    print("elapsed: {0} seconds".format(time.time() - start_time))    
+    print("------------ FINIHSED CREATING GRAPH ------------")
 
-    print(g.edges.count())
+    print("------------ CALCULATING INDEGREE ------------")
+    start_time = time.time()
+    indegrees = g.inDegrees
+    indegrees.show()
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINISHED CALCULATING INDEGREE ------------")
+
+    print("------------ CALCULATING OUTDEGREE ------------")
+    start_time = time.time()
+    outdegrees = g.outDegrees
+    outdegrees.show()
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINISHED CALCULATING OUTDEGREE ------------")
+
+    print("------------ CALCULATING DEGREE ------------")
+    start_time = time.time()
+    degrees = g.degrees
+    degrees.show()
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINISHED CALCULATING DEGREE ------------")
+
+    # print("------------ CALCULATING CONNECTED COMPONENTS ------------")
+    # sc.setCheckpointDir("/tmp/graphframes-example-connected-components")
+    # start_time = time.time()
+    # connectedComponets = g.connectedComponents()
+    # connectedComponets.show()
+    # print("elapsed: {0} seconds".format(time.time() - start_time))
+    # print("------------ FINISHED CALCULATING CONNECTED COMPONENTS ------------")
+
+    print("------------ CALCULATING STRONGLY CONNECTED COMPONENTS ------------")
+    start_time = time.time()
+    stronglyConnectedComponets = g.stronglyConnectedComponents(maxIter=10)
+    stronglyConnectedComponets.show()
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINISHED CALCULATING STRONGLY CONNECTED COMPONENTS ------------")
+
+    # print("------------ CALCULATING LABEL PROPAGATION (COMMUNITIES) ------------")
+    # start_time = time.time()
+    # communities = g.labelPropagation(maxIter=5)
+    # communities.show()
+    # print("elapsed: {0} seconds".format(time.time() - start_time))
+    # print("------------ FINISHED CALCULATING LABEL PROPAGATION (COMMUNITIES) ------------")
+
+    # print("------------ CALCULATING PAGERANK ------------")
+    # start_time = time.time()
+    # pagerank = g.pageRank(resetProbability=0.15, tol=0.01).vertices
+    # pagerank.show()
+    # print("elapsed: {0} seconds".format(time.time() - start_time))
+    # print("------------ FINISHED CALCULATING PAGERANK ------------")
+
+    print("------------ CALCULATING TRIANGLE COUNT ------------")
+    start_time = time.time()
+    triangleCount = g.triangleCount()
+    triangleCount.show()
+    print("elapsed: {0} seconds".format(time.time() - start_time))
+    print("------------ FINISHED CALCULATING TRIANGLE COUNT ------------")
 
     # #vectorizacion de los atributos
     # vector = VectorAssembler(inputCols = ['Domestic', 'Beat', 'District', 'Community Area', 'X Coordinate', 'Y Coordinate', 

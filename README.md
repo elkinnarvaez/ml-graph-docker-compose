@@ -23,6 +23,9 @@ Ejectar limpieza de datos
 ```
 spark-2.4.1/bin/spark-submit --master spark://master:7077 /usr/src/data_cleaning.py /tmp/data/Chicago_Crimes_2012_to_2017.csv /tmp/data/cleaned_data/
 ```
+```
+spark-2.4.1/bin/spark-submit --master spark://master:7077 /usr/src/data_cleaning.py /tmp/data/Chicago_Crimes_2012_to_2017.csv /tmp/data/cleaned_data_timestamp/
+```
 
 ## Machine learning
 Ejecutar código

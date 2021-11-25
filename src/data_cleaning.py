@@ -52,15 +52,16 @@ if __name__ == "__main__":
 
     #castear str a dateStamp
     columnasDate = ['Date'] 
-    df = df.withColumn(columnasDate[0]+" ts",to_timestamp(columnasDate[0], "MM/dd/yyyy hh:mm:ss"))
-    df = df.select([column for column in df.columns if column not in columnasDate])
+    df = df.withColumn(columnasDate[0]+"ts",to_timestamp(columnasDate[0], "MM/dd/yyyy hh:mm:ss"))
+    # df = df.select([column for column in df.columns if column not in columnasDate])
 
     #extrar componentes de las fechas
-    columnasTime = ['Date ts']
-    df = df.withColumn("mesDel", month(col("Date ts")))
-    df = df.withColumn("diaDel", dayofweek(col("Date ts")))
-    df = df.withColumn("horaDel", hour(col("Date ts")))
-    df = df.withColumn("minutoDel", minute(col("Date ts")))
+    columnasTime = ['Datets']
+    df = df.withColumn("mesDel", month(col("Datets")))
+    df = df.withColumn("diaDel", dayofmonth(col("Datets")))
+    df = df.withColumn("horaDel", hour(col("Datets")))
+    df = df.withColumn("minutoDel", minute(col("Datets")))
+    # df = df.withColumn("segundoDel", second(col("Datets")))
     df = df.select([column for column in df.columns if column not in columnasTime])
 
     #importar datos limpios a csv

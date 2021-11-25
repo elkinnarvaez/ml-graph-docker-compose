@@ -1,0 +1,26 @@
+Objetivo: Se desea hacer un grafo que tenga como nodos las instancias del conjunto de datos, para luego calcular medidas/caracteristicas sobre los nodos/instancias del grafo construido y finalmente poder agregar estas medidas como características adicionales al conjunto de datos que pueden ayudar en la predicción.
+* Se debe tener en cuenta la dirección de los arcos (es más fuerte si la conexión es no dirigida), cómo también el peso que una conexión tiene.
+* Posibles medidas sobre el grafo:
+    - Grado de entrada de cada nodo/instancia ---> grafo dirigido
+    - Grado de salida de cada nodo/instancia ---> grafo dirigido
+    - Grado total de cada nodo/instancia
+    - Comunidades (ver a que comunidad pertenece cada nodo/instancia)
+    - Strongly Connected Components (SCC) ---> grafo dirigido
+        -> SCC: nodes that are strongly connected
+        -> Upstream: nodes that can reach the SCC, but cannot be reached by it
+        -> Downstream: nodes that can be reached by the SCC, but cannot reach it
+        -> Tendril: nodes reachable from upstream nodes that cannot reach the SCC
+        -> Tubes: nodes that would not have a path even if directions are ignored
+    - Componentes conectadas (ver a que componente conectada pertenece cada nodo/instancia)
+    - Puentes: Par de nodos tales que, al desconectarlos, causan una separación en el grafo (ver que nodos pertenecen a un puente t/f).
+    - Distancia promedio de un nodo a todos los demás
+    - Clustering coefficient (local + global)
+        -> Clustering coefficient global: triángulos en el grafo / total de posibles triángulos en el grafo
+        -> Clustering coefficient local (para nodos/instancias): triángulos en los que está involucrado un nodo / triángulos en los que pudo haber estado involucrado el nodo con los triangulos no formados
+    - Homophily analysis local: dada la cantidad de conexiones que tiene un nodo/instancia, cuantas conexiones van a vecinos de mi mismo tipo y cuantas van a vecinos de diferente tipo --> si se tienen nodos con diferentes tipos
+    - Medidas de centralidad
+        -> Centralidad de grado: grado de entrada, salida
+        -> Pagerank
+        -> Closeness
+        -> Betweenness
+        -> Eigenvalue
